@@ -78,7 +78,7 @@ const ProductList = () => {
             <div className={styles.imageWrapper}>
               {product.mainImage ? (
                 <img
-                  src={`http://localhost:8080/uploads/${product.mainImage}`} 
+                  src={product.mainImage}
                   alt={product.productName}
                   className={styles.image}
                 />

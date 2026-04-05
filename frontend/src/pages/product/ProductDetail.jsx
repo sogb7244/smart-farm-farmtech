@@ -103,7 +103,7 @@ const ProductDetail = () => {
           >
             <SwiperSlide className={styles.imageWrapper}>
               <img 
-                src={`http://localhost:8080/uploads/${mainImg}`}
+                src={mainImg}
                 className={styles.image}  
               />
             </SwiperSlide>

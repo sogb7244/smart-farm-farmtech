@@ -143,7 +143,7 @@ const Cart = () => {
       </td>
       <td className={styles.img_name_div}>
         <img
-          src = {`http://localhost:8080/uploads/${item.img}`}
+          src = {item.img}
           className={styles.item_img}
         />
         <p>{item.productName}</p>
