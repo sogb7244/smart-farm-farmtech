@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -78,7 +77,7 @@ public class ProductService {
 
   // 상품 수정
   @Transactional
-  public void updateProduct(ProductDTO productDTO) throws IOException {
+  public void updateProduct(ProductDTO productDTO) {
     // 텍스트 정보 항상 업데이트
     productMapper.updateProduct(productDTO);
 
@@ -94,12 +93,14 @@ public class ProductService {
     }
 
     // 서브 이미지 (선택했을 때만 -> 삭제)
-    if (productDTO.getDeleteImgUrl() != null){
-        productMapper.deleteProductImageByType(productDTO.getProductId(),"SUB");
+    if (productDTO.getDeleteImgIds() != null){
+      for(int id : productDTO.getDeleteImgIds()){
+        productMapper.deleteProductImageById(id);
+      }
     }
     // 서브 이미지 (새로 INSERT)
-    int order = 1;
     if (productDTO.getSubImgUrls() != null){
+      int order = 1;
       List<ProductImageDTO> subs = new ArrayList<>();
       for (String url : productDTO.getSubImgUrls()){
         ProductImageDTO subimg = new ProductImageDTO();

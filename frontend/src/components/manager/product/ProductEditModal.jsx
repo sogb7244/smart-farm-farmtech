@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { getProduct, getCategory, putProduct } from '../../../api/product/product'
+import { uploadImageToS3 } from '../../../api/product/upload'
 import Input from '../../common/Input'
 import Button from '../../common/Button'
 import Select from '../../common/Select'
 import styles from '../../../pages/manager/ProductRegister.module.css'
 import Textarea from '../../common/Textarea'
+import useAuthStore from '../../../store/authStore'
 
 /**
  * 상품 수정 모달 컴포넌트
@@ -36,6 +38,8 @@ const ProductEditModal = ({ product, onClose, onSuccess }) => {
 
   const [errors,      setErrors]      = useState({})
   const [submitError, setSubmitError] = useState(false)
+  const [isLoading,setIsLoading] =useState(false);
+  const {showToast} = useAuthStore();
 
   const mainInputRef   = useRef()
   const subInputRef    = useRef()
@@ -74,6 +78,7 @@ const ProductEditModal = ({ product, onClose, onSuccess }) => {
         const subs = images.filter(img => img.imageType === 'SUB')
         if (main)      setMainImgPreview(main.imageSavedName)
         if (detailImg) setDetailPreview(detailImg.imageSavedName)
+        console.log('[수정모달] subs:', subs.map(s => ({ imageId: s.imageId, type: s.imageType })))
         if (subs.length > 0) setExistingSubImgs(subs.map(s => ({ imageId: s.imageId, url: s.imageSavedName })))
       })
   }, [])
@@ -99,15 +104,13 @@ const ProductEditModal = ({ product, onClose, onSuccess }) => {
   }
 
   /** 기존 서브 이미지 개별 삭제 */
-  const clearExistingSubImg = (e, imageId) => {
-      e.stopPropagation()
+  const clearExistingSubImg = (imageId) => {
       setExistingSubImgs(prev => prev.filter(img => img.imageId !== imageId))
       setDeletedSubImageIds(prev => [...prev, imageId])
   }
 
   /** 새 서브 이미지 개별 삭제 */
-  const clearNewSubImg = (e, index) => {
-      e.stopPropagation()
+  const clearNewSubImg = (index) => {
       setNewSubImgFiles(prev => prev.filter((_, i) => i !== index))
       setNewSubImgPreviews(prev => prev.filter((_, i) => i !== index))
       if (newSubImgFiles.length === 1) subInputRef.current.value = ''
@@ -158,27 +161,26 @@ const ProductEditModal = ({ product, onClose, onSuccess }) => {
   const handleSave = async () => {
     if (!validate()) return
 
-    const data = new FormData()
-    data.append('categoryId',    form.categoryId)
-    data.append('productName',   form.productName)
-    data.append('productPrice',  form.productPrice)
-    data.append('productStock',  form.productStock)
-    data.append('productStatus', form.productStatus)
-    data.append('productDesc', form.productDesc)
-
-    /** 새로 선택한 파일만 전송 → 없으면 백엔드에서 기존 이미지 유지 */
-    if (mainImgFile)  data.append('mainImg', mainImgFile)
-    if (detailImgFile) data.append('detailImg', detailImgFile)
-    if (newSubImgFiles.length > 0) newSubImgFiles.forEach(f => data.append('subImgs', f))
-
+    console.log('[수정저장] deletedSubImageIds:', deletedSubImageIds)
+    if (newSubImgFiles.length > 0){
+      setIsLoading(true)
+    }
     try {
-      await putProduct(product.productId, data)
+      const mainImgUrl   = mainImgFile   ? await uploadImageToS3(mainImgFile)                        : null
+      const detailImgUrl = detailImgFile ? await uploadImageToS3(detailImgFile)                      : null
+      const subImgUrls   = newSubImgFiles.length > 0 ? await Promise.all(newSubImgFiles.map(uploadImageToS3)) : null
+
+      await putProduct(product.productId, form, mainImgUrl, subImgUrls, detailImgUrl, deletedSubImageIds)
       onSuccess()
       onClose()
     } catch (e) {
       setSubmitError(true)
       setTimeout(() => setSubmitError(false), 3000)
+    } finally {
+      setIsLoading(false);
+      showToast("수정을 완료했습니다");
     }
+
   }
 
   const STATUS_OPTIONS = [
@@ -222,29 +224,31 @@ const ProductEditModal = ({ product, onClose, onSuccess }) => {
 
           <div className={styles.imgSection}>
             <p className={styles.imgLabel}>서브 이미지 <span className={styles.optional}>(선택)</span></p>
+
+            {/* 이미지 그리드: uploadBox 밖으로 분리해 이벤트 충돌 제거 */}
+            {(existingSubImgs.length > 0 || newSubImgPreviews.length > 0) && (
+              <div className={styles.subGrid}>
+                {existingSubImgs.map(img => (
+                  <div key={img.imageId} className={styles.subImgWrap}>
+                    <img src={img.url} alt='서브' className={styles.subPreviewImg} />
+                    <button type="button" className={styles.clearBtnSub} onClick={() => clearExistingSubImg(img.imageId)}>✕</button>
+                  </div>
+                ))}
+                {newSubImgPreviews.map((url, i) => (
+                  <div key={`new-${i}`} className={styles.subImgWrap}>
+                    <img src={url} alt={`새 서브${i + 1}`} className={styles.subPreviewImg} />
+                    <button type="button" className={styles.clearBtnSub} onClick={() => clearNewSubImg(i)}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 파일 업로드 트리거 박스 */}
             <div className={styles.uploadBox} onClick={() => subInputRef.current.click()}>
-              {existingSubImgs.length > 0 || newSubImgPreviews.length > 0
-                ? <div className={styles.subGrid}>
-                    {/* 기존 이미지 */}
-                    {existingSubImgs.map(img => (
-                      <div key={img.imageId} className={styles.subImgWrap}>
-                        <img src={img.url} alt='서브' className={styles.subPreviewImg} />
-                        <button className={styles.clearBtnSub} onClick={(e) => clearExistingSubImg(e, img.imageId)}>✕</button>
-                      </div>
-                    ))}
-                    {/* 새로 추가한 이미지 */}
-                    {newSubImgPreviews.map((url, i) => (
-                      <div key={`new-${i}`} className={styles.subImgWrap}>
-                        <img src={url} alt={`새 서브${i + 1}`} className={styles.subPreviewImg} />
-                        <button className={styles.clearBtnSub} onClick={(e) => clearNewSubImg(e, i)}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                : <div className={styles.placeholder}>
-                    <span className={styles.uploadIcon}>+</span>
-                    <span>여러 장 선택 가능</span>
-                  </div>
-              }
+              <div className={styles.placeholder}>
+                <span className={styles.uploadIcon}>+</span>
+                <span>여러 장 선택 가능</span>
+              </div>
             </div>
 
             <input ref={subInputRef} type='file' accept='image/*' multiple hidden onChange={handleSubImgs} />
@@ -313,7 +317,12 @@ const ProductEditModal = ({ product, onClose, onSuccess }) => {
               rows={5}
             />
           </div>
-          <Button fullWidth onClick={handleSave}>저장</Button>
+          <Button 
+            fullWidth 
+            onClick={handleSave}
+            type='button'
+            disabled={isLoading}
+          >{isLoading ? '수정 중...' : '수정'}</Button>
         </div>
       </div>
     </div>

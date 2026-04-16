@@ -6,6 +6,7 @@ import Select from '../../common/Select'
 import styles from '../../../pages/manager/ProductRegister.module.css'
 import Textarea from '../../common/Textarea'
 import { uploadImageToS3 } from '../../../api/product/upload'
+import useAuthStore from '../../../store/authStore'
 
 /**
  * 상품 등록 모달 컴포넌트
@@ -41,6 +42,7 @@ const ProductRegisterModal = ({ onClose, onSuccess }) => {
   const detailInputRef = useRef()
 
   const [isLoading,setIsLoading] = useState(false);
+  const {showToast} = useAuthStore();
 
   useEffect(() => {
     getCategory()
@@ -134,7 +136,7 @@ const ProductRegisterModal = ({ onClose, onSuccess }) => {
       setTimeout(() => setSubmitError(false), 3000)
     } finally {
       setIsLoading(false)
-      alert('상품등록 완료')
+      showToast("상품 등록을 완료했습니다!")
     }
 
   }

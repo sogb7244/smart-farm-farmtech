@@ -52,7 +52,6 @@ public interface ProductMapper {
   // 이미지 단건 삭제
   void deleteProductImageById(@Param("imageId") int imageId);
 
-
   /// Gemini ///
   ///
   // 재고가 있는 전체 활성 상품 목록 조회 (AI 매칭용)
